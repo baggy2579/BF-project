@@ -1,0 +1,150 @@
+---
+title: "Job openings"
+author: "Alfazkhan"
+date: "2024-11-26"
+output: html_document
+---
+
+```{r}
+# Load necessary libraries
+library(readxl)  # For reading Excel files
+library(fpp2)    # For time series analysis and forecasting
+library(ggplot2) # For visualization
+
+# Load the dataset
+file_path <- "C:/Users/Alfaz Khan/Downloads/Job Openings.xlsx"
+job_openings <- read_excel(file_path)
+
+# Convert the data to a time series object
+# This reshapes the dataset into a time series starting from January 2015 with a monthly frequency.
+monthly_values <- as.vector(t(job_openings[, -1]))  # Exclude "Years" column and transpose
+job_openings_ts <- ts(monthly_values, start = c(2015, 1), frequency = 12)
+
+# Handle missing values
+# Replace any NA values in the dataset with the mean to ensure proper model functionality.
+job_openings_ts[is.na(job_openings_ts)] <- mean(job_openings_ts, na.rm = TRUE)
+
+# Plot the time series
+# This graph shows the trend and any recurring patterns over time in job openings data.
+plot(job_openings_ts, main = "Monthly Job Openings", ylab = "Job Openings")
+
+# Decompose the time series
+# Break the series into trend, seasonal, and random components to better understand the structure of the data.
+decomposed <- decompose(job_openings_ts, type = "multiplicative")
+plot(decomposed)
+
+# Explanation:
+# - Trend: Shows the long-term direction of job openings.
+# - Seasonal: Highlights recurring monthly patterns, such as spikes during hiring seasons.
+# - Random: Displays irregular variations not explained by trend or seasonality.
+
+# Naive Forecast
+# Assumes future values will equal the most recent observed value.
+naive_model <- naive(job_openings_ts, h = 12)
+plot(naive_model)
+
+# Explanation:
+# Naive forecasting is a simple baseline model. It’s useful for comparison but lacks consideration of trends or seasonality.
+
+# Residual analysis
+# Analyze the residuals (differences between actual and forecasted values) to evaluate model fit.
+naive_residuals <- residuals(naive_model)
+plot(naive_residuals, main = "Residuals of Naive Model")
+
+# Explanation:
+# Residuals should have no visible pattern if the model is appropriate. Patterns indicate the need for a more advanced model.
+
+# Simple Moving Average
+# Smoothing reduces noise in the time series, highlighting the overall trend.
+moving_avg <- ma(job_openings_ts, order = 12)
+plot(job_openings_ts, main = "Job Openings with Moving Average", ylab = "Job Openings")
+lines(moving_avg, col = "red", lwd = 2)
+
+# Explanation:
+# The moving average (red line) smooths out short-term fluctuations and emphasizes the long-term trend in job openings.
+
+# Simple Exponential Smoothing
+# Suitable for series without strong trends or seasonality.
+ses_model <- ses(job_openings_ts, h = 12)
+plot(ses_model)
+
+# Explanation:
+# Exponential smoothing uses weighted averages of past data to forecast future values. It is effective for non-seasonal data.
+
+# Holt-Winters Model
+# Captures both trend and seasonality for improved forecasting.
+hw_model <- HoltWinters(job_openings_ts)
+hw_forecast <- forecast(hw_model, h = 12)
+plot(hw_forecast)
+
+# Explanation:
+# The Holt-Winters model is ideal for data with seasonality and trends. It adjusts to changing patterns over time.
+
+# Compare model performance
+naive_acc <- accuracy(naive_model)
+ses_acc <- accuracy(ses_model)
+hw_acc <- accuracy(hw_forecast)
+
+# Summarize accuracy
+accuracy_summary <- data.frame(
+  Model = c("Naive", "Exponential Smoothing", "Holt-Winters"),
+  MAE = c(naive_acc[, "MAE"], ses_acc[, "MAE"], hw_acc[, "MAE"]),
+  RMSE = c(naive_acc[, "RMSE"], ses_acc[, "RMSE"], hw_acc[, "RMSE"])
+)
+accuracy_summary
+
+# Explanation:
+# Lower values of MAE (Mean Absolute Error) and RMSE (Root Mean Square Error) indicate better model accuracy.
+# This helps in choosing the most reliable model for forecasting.
+
+# Final Forecast Plot
+# Highlights the most promising model (Holt-Winters) for a 12-month forecast.
+plot(hw_forecast, main = "12-Month Job Openings Forecast")
+
+# Explanation:
+# Shows predicted values for the next 12 months based on the best-fit model.
+
+# Fit a linear regression model
+time_index <- 1:length(monthly_values)
+data <- data.frame(Month_Index = time_index, Openings = as.vector(monthly_values))
+reg_model <- lm(Openings ~ Month_Index, data = data)
+
+# Regression Summary
+summary(reg_model)
+
+# Explanation:
+# The regression model identifies the linear trend in job openings over time. 
+# Coefficients indicate how job openings change with each passing month.
+
+# Plot the regression line
+ggplot(data, aes(x = Month_Index, y = Openings)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Job Openings Regression Model", x = "Month Index", y = "Job Openings")
+
+# Explanation:
+# Blue points represent actual data, and the red line shows the predicted trend based on the regression model.
+
+# Perform Differencing to Check Stationarity
+# Stationarity is a key assumption for ARIMA models.
+ndiffs(job_openings_ts)  # Determine the number of differences needed
+job_openings_diff <- diff(job_openings_ts, differences = 1)
+tsdisplay(job_openings_diff)
+
+# Explanation:
+# Differencing removes trends to make the series stationary, enabling ARIMA modeling.
+
+# Fit ARIMA Model
+auto_fit <- auto.arima(job_openings_ts, trace = TRUE, stepwise = FALSE)
+print(auto_fit)
+
+# Explanation:
+# ARIMA combines autoregressive (AR) and moving average (MA) components with differencing (I) for robust modeling.
+
+# Perform Forecast for the Next Five Periods
+# Uses the ARIMA model to forecast job openings for five months ahead.
+forecast_plot <- forecast(auto_fit, h = 5, level = c(99.5))
+plot(forecast_plot, main = "ARIMA Model Forecast for Job Openings", ylab = "Job Openings")
+
+# Explanation:
+# The ARIMA forecast predicts job openings for the next five months. Shaded areas indicate confidence intervals, reflecting uncertainty.
